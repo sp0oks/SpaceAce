@@ -15,6 +15,14 @@ ROWS = 25
 	; Ship Data
 	shipY BYTE 1
 	
+	; Enemies Data
+	enemiesArr BYTE COLS DUP (-1)					; Enemies array - Index determines X position, and the value determines Y position; if Y is -1, enemy doesn't exist
+	enemyUpCtr BYTE 0								; Enemy iteration counter
+	enemyGenCtr BYTE 0								; Enemy generation counter
+	
+	; Bullets Data
+	bulletsArr BYTE COLS DUP(-1)					; Bullets array - Index determines X position, and the value determines Y position; if Y is -1, bullet doesn't exist
+	
 	; Ship Literals
 	shipThruster db '<|==]'
 	shipMain db '<|===)'
@@ -24,9 +32,11 @@ main PROC
 	Invoke GetStdHandle, STD_OUTPUT_HANDLE
 	mov outHandle, eax
 	
-gameLoop:
-	call Clrscr
+	call Randomize
 	
+gameLoop:
+	call UpdateEnemies
+
 	call ResetScreen
 	
 	call UpdateScreen
@@ -46,7 +56,7 @@ main ENDP
 
 ;======================================================
 ;
-ResetScreen PROC 
+ResetScreen PROC uses ecx
 ;======================================================
 	xor ecx, ecx
 	
@@ -74,12 +84,13 @@ ResetScreen ENDP
 
 ;======================================================
 ;
-UpdateScreen PROC
+UpdateScreen PROC uses eax ebx ecx edx
 ;======================================================
 	xor ebx, ebx
 	xor ecx, ecx
 	xor edx, edx
 
+; Player ship
 	mov eax, COLS
 	mov bl, shipY
 	mul ebx			; eax = COLS * shipY
@@ -118,13 +129,103 @@ botShip:
 	cmp ecx, LENGTHOF shipThruster
 	jne botShip
 	
+; Enemies
+	xor ecx, ecx
+enemiesLoop:
+	movsx eax, enemiesArr[ecx]		; row
+	
+	cmp eax, -1						; check if there's a enemy ship
+	je nextEnemy
+
+	mov ebx, COLS
+	mul ebx							; eax = COLS*y
+	add eax, ecx					; eax = COLS*y + x
+	
+	mov scrBuffer[eax * CHAR_INFO].Char, '<'
+	mov scrBuffer[eax * CHAR_INFO].Attributes, 0F4h
+
+nextEnemy:
+	inc ecx
+	cmp ecx, LENGTHOF enemiesArr
+	jne enemiesLoop
+	
+; Bullets
+	xor ecx, ecx
+bulletsLoop:
+	movsx eax, bulletsArr[ecx]		; row
+	
+	cmp eax, -1						; check if there's a bullet
+	je nextBullet
+	
+	mov ebx, COLS
+	mul ebx
+	add eax, ecx
+	
+	mov scrBuffer[eax * CHAR_INFO].Char, '-'
+	mov scrBuffer[eax * CHAR_INFO].Attributes, 0F6h
+	
+nextBullet:
+	inc ecx
+	cmp ecx, LENGTHOF bulletsArr
+	jne bulletsLoop
+	
 	ret
 UpdateScreen ENDP
 
+;======================================================
+;
+UpdateEnemies PROC uses eax ecx edx
+;======================================================
+	mov dl, enemyUpCtr
+	cmp dl, 2					; After three main updates, update enemies position
+	je trueUpdate
+
+	inc dl
+	mov enemyUpCtr, dl
+	
+	jmp endUpdate
+trueUpdate:
+
+	; Update all enemies position
+	mov ecx, 1
+enemyLoop:
+	mov dl, enemiesArr[ecx]
+	mov enemiesArr[ecx-1], dl
+	
+	inc ecx
+	cmp ecx, LENGTHOF enemiesArr
+	jne enemyLoop
+	
+	mov enemiesArr[ecx-1], -1
+	
+	; Check if should generate new enemy
+	mov dl, enemyGenCtr
+	cmp dl, 3				; After three updates, generate new enemy (total: 6 updates)
+	je trueGen
+	
+	inc dl
+	mov enemyGenCtr, dl
+	
+	jmp endGen
+trueGen:
+	mov eax, 21				; Range 0-21
+	call RandomRange
+	add eax, 2				; Range 2-23
+	
+	mov enemiesArr[LENGTHOF enemiesArr - 1], al
+
+	mov enemyGenCtr, 0
+endGen:
+	
+	mov enemyUpCtr, 0
+endUpdate:
+	
+	ret
+UpdateEnemies ENDP
 
 ;======================================================
 ;
-ReadInput PROC
+ReadInput PROC uses eax edx
 ;======================================================
 	mov eax, 50
 	call Delay		; wait 50ms
