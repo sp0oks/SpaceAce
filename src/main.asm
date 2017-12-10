@@ -1,5 +1,7 @@
 INCLUDE ..\libs\Irvine32.inc
 INCLUDE ..\libs\win32.inc
+INCLUDE ..\libs\winmm.inc
+INCLUDELIB ..\libs\winmm.lib
 
 COLS = 80
 ROWS = 25
@@ -23,6 +25,14 @@ GetMatrixAddr PROTO mAddr:DWORD, mCols: DWORD, iRows: DWORD, iCols:DWORD, sType:
 	scrCoord COORD <0, 0>
 	scrRect SMALL_RECT <0, 0, COLS-1, ROWS-1>
 	
+	; Sound Effects Data
+	menuChoiceFX BYTE '..\media\menuChoice.wav',0
+	bulletFX 	 BYTE '..\media\bullet.wav',0
+	bombFX 		 BYTE '..\media\bomb.wav',0
+	laserFX 	 BYTE '..\media\laser.wav',0
+	gameOverFX   BYTE '..\media\gameOver.wav',0
+	SND_FILENAME DWORD 00020001h
+	
 	; Menu Data
 	cursorPos BYTE 0								; Relative menu cursor position
 	
@@ -36,15 +46,15 @@ GetMatrixAddr PROTO mAddr:DWORD, mCols: DWORD, iRows: DWORD, iCols:DWORD, sType:
 	
 	; Enemies Data
 	enemiesMatrix BYTE COLS*22 DUP (0)				; Enemy matrix
-	enemyCycle BYTE 1								; Defines how much normal cycles need to pass, to update enemies
-	enemyUpCtr BYTE 0								; Enemy iteration counter
-	enemyGenCtr BYTE 0								; Enemy generation counter
+	enemyCycle 	  BYTE 1							; Defines how many normal cycles must happen to update enemies
+	enemyUpCtr	  BYTE 0							; Enemy iteration counter
+	enemyGenCtr   BYTE 0							; Enemy generation counter
 	
 	; Bullets Data
-	bulletsMatrix BYTE COLS*22 DUP(0)					; Bullets array - Index determines X position, and the value determines Y position; if Y is -1, bullet doesn't exist
-	bulletSCtr BYTE 0
-	bulletMCtr BYTE 0
-	bulletLCtr BYTE 0
+	bulletsMatrix BYTE COLS*22 DUP(0)				; Bullets array - Index determines X position, and the value determines Y position; if Y is -1, bullet doesn't exist
+	bulletSCtr 	  BYTE 0
+	bulletMCtr 	  BYTE 0
+	bulletLCtr 	  BYTE 0
 	
 	; Ship Literals
 	shipThruster db '<|=>'
@@ -90,7 +100,7 @@ GetMatrixAddr PROTO mAddr:DWORD, mCols: DWORD, iRows: DWORD, iCols:DWORD, sType:
 .code
 
 main PROC
-	Invoke GetStdHandle, STD_OUTPUT_HANDLE
+	INVOKE GetStdHandle, STD_OUTPUT_HANDLE
 	mov outHandle, eax
 	
 	call Randomize
@@ -163,7 +173,7 @@ state2:
 state3:
 	call ResetInsScreen
 writeCons:
-	Invoke WriteConsoleOutput, outHandle, ADDR scrBuffer, scrSize, scrCoord, ADDR scrRect
+	INVOKE WriteConsoleOutput, outHandle, ADDR scrBuffer, scrSize, scrCoord, ADDR scrRect
 	call UpdateScore
 
 	ret
@@ -240,13 +250,13 @@ blackBack:
 	xor ecx, ecx
 	xor edx, edx
 logoCol:
-	Invoke GetMatrixAddr, ADDR logo, LCOLS, edx, ecx, TYPE logo				; returns logo[edx][ecx] pointer
+	INVOKE GetMatrixAddr, ADDR logo, LCOLS, edx, ecx, TYPE logo				; returns logo[edx][ecx] pointer
 	mov esi, eax
 	push ecx
 	push edx
 	add ecx, 16
 	add edx, 4
-	Invoke GetMatrixAddr, ADDR scrBuffer, COLS, edx, ecx, TYPE scrBuffer	; returns scrBuffer[edx][ecx] pointer
+	INVOKE GetMatrixAddr, ADDR scrBuffer, COLS, edx, ecx, TYPE scrBuffer	; returns scrBuffer[edx][ecx] pointer
 	mov edi, eax
 	pop edx
 	pop ecx
@@ -306,7 +316,7 @@ quitCopy:
 ; Cursor selector
 	movzx eax, cursorPos
 	add eax, 20
-	Invoke GetMatrixAddr, ADDR scrBuffer, COLS, eax, 9, TYPE scrBuffer		; returns scrBuffer[eax][9] pointer
+	INVOKE GetMatrixAddr, ADDR scrBuffer, COLS, eax, 9, TYPE scrBuffer		; returns scrBuffer[eax][9] pointer
 	
 	mov (CHAR_INFO PTR[eax]).Char, '>'
 	
@@ -387,13 +397,13 @@ blackBack:
 	xor ecx, ecx
 	xor edx, edx
 instrCol:
-	Invoke GetMatrixAddr, ADDR instructions, INSCOLS, edx, ecx, TYPE instructions 	; returns logo[edx][ecx] pointer
+	INVOKE GetMatrixAddr, ADDR instructions, INSCOLS, edx, ecx, TYPE instructions 	; returns logo[edx][ecx] pointer
 	mov esi, eax
 	push ecx
 	push edx
 	add ecx, 22
 	add edx, 7
-	Invoke GetMatrixAddr, ADDR scrBuffer, COLS, edx, ecx, TYPE scrBuffer			; returns scrBuffer[edx][ecx] pointer
+	INVOKE GetMatrixAddr, ADDR scrBuffer, COLS, edx, ecx, TYPE scrBuffer			; returns scrBuffer[edx][ecx] pointer
 	mov edi, eax
 	pop edx
 	pop ecx
@@ -453,7 +463,7 @@ quitCopy:
 ; Cursor selector
 	movzx eax, cursorPos
 	add eax, 20
-	Invoke GetMatrixAddr, ADDR scrBuffer, COLS, eax, 9, TYPE scrBuffer		; returns scrBuffer[eax][9] pointer
+	INVOKE GetMatrixAddr, ADDR scrBuffer, COLS, eax, 9, TYPE scrBuffer		; returns scrBuffer[eax][9] pointer
 	
 	mov (CHAR_INFO PTR[eax]).Char, '>'
 	
@@ -595,9 +605,9 @@ gameScore:
 	mov bl, LENGTHOF scoreTxt
 	add dl, bl
 	mov dh, 0
-	call gotoXY
+	call GoToXY
 	mov eax, currScore
-	call writeDEC
+	call writeDec
 
 finalScore:
 	cmp gameState, 2
@@ -607,9 +617,9 @@ finalScore:
 	mov bl, LENGTHOF finalScoreTxt
 	add dl, bl
 	mov dh, 14
-	call gotoXY
+	call GoToXY
 	mov eax, currScore
-	call writeDEC
+	call writeDec
 
 noScore:
 	ret
@@ -635,13 +645,13 @@ blackBack:
 	xor ecx, ecx
 	xor edx, edx
 gameOverCol:
-	Invoke GetMatrixAddr, ADDR gameOver, GOCOLS, edx, ecx, TYPE logo		; returns gameover[edx][ecx] pointer
+	INVOKE GetMatrixAddr, ADDR gameOver, GOCOLS, edx, ecx, TYPE logo		; returns gameover[edx][ecx] pointer
 	mov esi, eax
 	push ecx
 	push edx
 	add ecx, 13
 	add edx, 4
-	Invoke GetMatrixAddr, ADDR scrBuffer, COLS, edx, ecx, TYPE scrBuffer	; returns scrBuffer[edx][ecx] pointer
+	INVOKE GetMatrixAddr, ADDR scrBuffer, COLS, edx, ecx, TYPE scrBuffer	; returns scrBuffer[edx][ecx] pointer
 	mov edi, eax
 	pop edx
 	pop ecx
@@ -714,7 +724,7 @@ quitCopy:
 ; Cursor selector
 	movzx eax, cursorPos
 	add eax, 20
-	Invoke GetMatrixAddr, ADDR scrBuffer, COLS, eax, 9, TYPE scrBuffer		; returns scrBuffer[eax][9] pointer
+	INVOKE GetMatrixAddr, ADDR scrBuffer, COLS, eax, 9, TYPE scrBuffer		; returns scrBuffer[eax][9] pointer
 	
 	mov (CHAR_INFO PTR[eax]).Char, '>'
 	
@@ -830,8 +840,6 @@ tileLoop:
 	je nextTile
 	cmp bulletsMatrix[ecx], 0
 	je nextTile
-	
-	
 	mov al, enemiesMatrix[ecx]
 	cmp al, bulletsMatrix[ecx]
 	jbe instaKill
@@ -843,7 +851,6 @@ instaKill:
 finish:	
 	mov enemiesMatrix[ecx], al
 	mov bulletsMatrix[ecx], 0
-	
 nextTile:
 	inc ecx
 	cmp ecx, LENGTHOF enemiesMatrix
@@ -854,7 +861,7 @@ nextTile:
 rowLoop:
 	cmp enemiesMatrix[ecx], 0
 	je nextRow
-	
+	INVOKE PlaySound, OFFSET gameOverFX, NULL, SND_FILENAME
 	mov gameState, 2
 	
 nextRow:
@@ -881,7 +888,6 @@ CheckTime PROC uses eax edx
 	mov timeDifUp, eax
 
 notUp:
-	
 	ret
 CheckTime ENDP
 
@@ -894,7 +900,6 @@ ReadMenuInput PROC uses eax
 	call Delay			; wait 50ms
 	
 	call ReadKey
-	
 	cmp dx, 'W'		; up arrow
 	je cursorUp
 	cmp dx, 'S' 	; down arrow
@@ -925,6 +930,7 @@ cursorDown:
 	jmp inputEnd
 	
 optionCh:
+	INVOKE PlaySound, OFFSET menuChoiceFX, NULL, SND_FILENAME
 	cmp cursorPos, 2
 	je quitOp
 	cmp cursorPos, 1
@@ -1004,7 +1010,7 @@ shipDown:
 shootSmall:
 	cmp bulletSCtr, 0
 	ja inputEnd
-
+	INVOKE PlaySound, OFFSET bulletFX, NULL, SND_FILENAME
 	movzx eax, shipY
 	inc eax
 	
@@ -1020,7 +1026,7 @@ shootSmall:
 shootMedium:
 	cmp bulletMCtr, 0
 	ja inputEnd
-
+	INVOKE PlaySound, OFFSET bombFX, NULL, SND_FILENAME
 	movzx eax, shipY
 	inc eax
 	
@@ -1036,7 +1042,7 @@ shootMedium:
 shootLarge:
 	cmp bulletLCtr, 0
 	ja inputEnd
-
+	INVOKE PlaySound, OFFSET laserFX, NULL, SND_FILENAME
 	movzx eax, shipY
 	inc eax
 	
